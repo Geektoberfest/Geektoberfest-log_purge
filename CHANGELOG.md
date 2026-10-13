@@ -8,6 +8,7 @@ All notable changes are documented here. Format based on
 
 ### Added
 - `--quiet` (`-q`) flag to suppress all output except errors for cron and automated scripts (#5).
+- `--min-size` and `--max-size` filters with `parse_size` helper supporting B, KB, MB, GB, and TB units (#6).
 
 ## [0.1.0] - 2026-10-04
 

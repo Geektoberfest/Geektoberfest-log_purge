@@ -42,15 +42,24 @@ def find_old_files(
     pattern: str = "*",
     recursive: bool = True,
     now: float | None = None,
+    min_size: int | None = None,
+    max_size: int | None = None,
 ) -> list[Candidate]:
     """Return files under *root* whose mtime is older than *days* days.
 
     - Only regular files are returned; directories are never candidates.
     - Symlinks are skipped, so nothing outside *root* can be touched.
     - *pattern* is an fnmatch glob applied to the file name (e.g. ``*.log``).
+    - *min_size* / *max_size* (bytes) filter files by size.
     """
     if days < 0:
         raise ValueError("days must be >= 0")
+    if min_size is not None and min_size < 0:
+        raise ValueError("min_size must be >= 0")
+    if max_size is not None and max_size < 0:
+        raise ValueError("max_size must be >= 0")
+    if min_size is not None and max_size is not None and min_size > max_size:
+        raise ValueError("min_size cannot be greater than max_size")
 
     root = Path(root)
     if not root.is_dir():
@@ -76,6 +85,10 @@ def find_old_files(
                 log.warning("Cannot stat %s: %s", path, exc.strerror)
                 continue
             if st.st_mtime < cutoff:
+                if min_size is not None and st.st_size < min_size:
+                    continue
+                if max_size is not None and st.st_size > max_size:
+                    continue
                 candidates.append(Candidate(path, st.st_size, st.st_mtime))
         if not recursive:
             break  # only the top-level directory

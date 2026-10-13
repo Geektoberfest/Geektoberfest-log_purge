@@ -4,6 +4,7 @@ import time
 import pytest
 
 from log_purge.purger import delete_files, find_old_files
+from log_purge.utils import parse_size
 
 DAY = 86_400
 
@@ -72,3 +73,39 @@ def test_invalid_inputs(tmp_path):
         find_old_files(tmp_path, -1)
     with pytest.raises(NotADirectoryError):
         find_old_files(tmp_path / "missing", 1)
+    with pytest.raises(ValueError):
+        find_old_files(tmp_path, 1, min_size=-1)
+    with pytest.raises(ValueError):
+        find_old_files(tmp_path, 1, max_size=-1)
+    with pytest.raises(ValueError):
+        find_old_files(tmp_path, 1, min_size=100, max_size=50)
+
+
+def test_parse_size():
+    assert parse_size("10MB") == 10 * 1024 * 1024
+    assert parse_size("10mb") == 10 * 1024 * 1024
+    assert parse_size("10 MB") == 10 * 1024 * 1024
+    assert parse_size("500B") == 500
+    assert parse_size("1KB") == 1024
+    assert parse_size("2GB") == 2 * 1024**3
+    assert parse_size("1.5KB") == 1536
+    assert parse_size("1024") == 1024
+
+    for invalid in ("", "   ", "abc", "-10MB", "10XB", "MB"):
+        with pytest.raises(ValueError):
+            parse_size(invalid)
+
+
+def test_find_old_files_size_filtering(tmp_path):
+    small = make_file(tmp_path / "small.log", 40, content="a" * 10)       # 10 bytes
+    medium = make_file(tmp_path / "medium.log", 40, content="b" * 100)    # 100 bytes
+    large = make_file(tmp_path / "large.log", 40, content="c" * 1000)     # 1000 bytes
+
+    # min_size alone
+    assert {c.path for c in find_old_files(tmp_path, 30, min_size=100)} == {medium, large}
+    # max_size alone
+    assert {c.path for c in find_old_files(tmp_path, 30, max_size=100)} == {small, medium}
+    # both min_size and max_size
+    assert {c.path for c in find_old_files(tmp_path, 30, min_size=50, max_size=500)} == {medium}
+    # boundary: exact match
+    assert {c.path for c in find_old_files(tmp_path, 30, min_size=10, max_size=10)} == {small}

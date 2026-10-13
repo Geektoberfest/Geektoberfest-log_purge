@@ -31,6 +31,9 @@ log-purge /logs --days 30 --yes
 
 # Only *.log files, top-level directory only
 log-purge /logs -d 14 -p "*.log" --no-recursive --yes
+
+# Only delete files older than 30 days that are at least 10 MB
+log-purge /logs -d 30 --min-size 10MB --yes
 ```
 
 | Option | Meaning |
@@ -38,6 +41,8 @@ log-purge /logs -d 14 -p "*.log" --no-recursive --yes
 | `-d, --days N` | Delete files older than N days (required) |
 | `-p, --pattern GLOB` | Match file names, default `*` |
 | `--no-recursive` | Don't descend into subdirectories |
+| `--min-size SIZE` | Delete only files at least this large (e.g. 10MB) |
+| `--max-size SIZE` | Delete only files at most this large (e.g. 100MB) |
 | `-n, --dry-run` | List what would be deleted, delete nothing |
 | `-y, --yes` | Skip the confirmation prompt |
 | `-v, --verbose` | Print every file handled |

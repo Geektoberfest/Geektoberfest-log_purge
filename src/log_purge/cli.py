@@ -17,7 +17,7 @@ from pathlib import Path
 
 from . import __version__
 from .purger import PurgeResult, delete_files, find_old_files
-from .utils import age_in_days, format_size
+from .utils import age_in_days, format_size, parse_size
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -32,6 +32,10 @@ def build_parser() -> argparse.ArgumentParser:
                    help="glob matched against file names (default: *)")
     p.add_argument("--no-recursive", action="store_true",
                    help="only look at the top-level directory")
+    p.add_argument("--min-size", type=str, default=None,
+                   help="only delete files at least this large (e.g. 10MB)")
+    p.add_argument("--max-size", type=str, default=None,
+                   help="only delete files at most this large (e.g. 100MB)")
     p.add_argument("-n", "--dry-run", action="store_true",
                    help="list what would be deleted, delete nothing")
     p.add_argument("-y", "--yes", action="store_true",
@@ -67,6 +71,27 @@ def main(argv: list[str] | None = None) -> int:
     if args.days < 0:
         print("error: --days must be >= 0", file=sys.stderr)
         return 2
+
+    min_bytes: int | None = None
+    if args.min_size is not None:
+        try:
+            min_bytes = parse_size(args.min_size)
+        except ValueError as exc:
+            print(f"error: invalid --min-size: {exc}", file=sys.stderr)
+            return 2
+
+    max_bytes: int | None = None
+    if args.max_size is not None:
+        try:
+            max_bytes = parse_size(args.max_size)
+        except ValueError as exc:
+            print(f"error: invalid --max-size: {exc}", file=sys.stderr)
+            return 2
+
+    if min_bytes is not None and max_bytes is not None and min_bytes > max_bytes:
+        print("error: --min-size cannot be greater than --max-size", file=sys.stderr)
+        return 2
+
     directory = args.directory.resolve()
     if not directory.is_dir():
         print(f"error: not a directory: {directory}", file=sys.stderr)
@@ -80,6 +105,7 @@ def main(argv: list[str] | None = None) -> int:
         candidates = find_old_files(
             directory, args.days, args.pattern,
             recursive=not args.no_recursive, now=now,
+            min_size=min_bytes, max_size=max_bytes,
         )
         if not candidates:
             if not args.quiet:
