@@ -1,9 +1,11 @@
+import logging
 import os
 import time
 
 import pytest
 
 from log_purge.purger import delete_files, find_old_files
+
 
 DAY = 86_400
 
@@ -72,3 +74,35 @@ def test_invalid_inputs(tmp_path):
         find_old_files(tmp_path, -1)
     with pytest.raises(NotADirectoryError):
         find_old_files(tmp_path / "missing", 1)
+
+
+def test_delete_files_dry_run(tmp_path, caplog):
+    a = make_file(tmp_path / "a.log", 40, "hello")
+    candidates = find_old_files(tmp_path, 30)
+    with caplog.at_level(logging.INFO):
+        result = delete_files(candidates, dry_run=True)
+    assert result.deleted == 1
+    assert result.freed_bytes == 5
+    assert a.exists()
+    assert any("WOULD_DELETE" in r.message and "5 bytes" in r.message for r in caplog.records)
+
+
+def test_delete_files_emits_log_records(tmp_path, caplog):
+    make_file(tmp_path / "a.log", 40, "hello")
+    candidates = find_old_files(tmp_path, 30)
+    with caplog.at_level(logging.INFO):
+        result = delete_files(candidates)
+    assert result.deleted == 1
+    assert any("DELETED" in r.message and "5 bytes" in r.message for r in caplog.records)
+
+
+def test_delete_files_failure_emits_failed_log_records(tmp_path, caplog):
+    a = make_file(tmp_path / "a.log", 40, "hello")
+    candidates = find_old_files(tmp_path, 30)
+    a.unlink()
+    with caplog.at_level(logging.ERROR):
+        result = delete_files(candidates)
+    assert result.deleted == 0
+    assert len(result.failures) == 1
+    assert any("FAILED" in r.message for r in caplog.records)
+

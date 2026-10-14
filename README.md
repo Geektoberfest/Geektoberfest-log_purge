@@ -29,6 +29,9 @@ log-purge /logs --days 30
 # Cron / scripts: skip the prompt
 log-purge /logs --days 30 --yes
 
+# Write an audit log of deletions
+log-purge /logs --days 30 --yes --log-file /var/log/log-purge.log
+
 # Only *.log files, top-level directory only
 log-purge /logs -d 14 -p "*.log" --no-recursive --yes
 ```
@@ -42,6 +45,7 @@ log-purge /logs -d 14 -p "*.log" --no-recursive --yes
 | `-y, --yes` | Skip the confirmation prompt |
 | `-v, --verbose` | Print every file handled |
 | `-q, --quiet` | Print nothing except errors |
+| `--log-file PATH` | Append an audit log of deletions to PATH |
 
 Cron example (daily at 02:00):
 
@@ -56,7 +60,9 @@ Cron example (daily at 02:00):
 - Symlinks are skipped, so nothing outside the target can be touched.
 - Refuses to run on a filesystem root.
 - Without `--yes`, a non-interactive run (no terminal) is refused rather than deleting silently.
+- With `--log-file`, the file is opened before deleting anything so an unwritable log never causes unlogged deletions.
 - A failure on one file is reported and the run continues.
+
 
 ## Exit codes
 
