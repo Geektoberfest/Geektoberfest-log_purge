@@ -40,8 +40,11 @@ def build_parser() -> argparse.ArgumentParser:
                    help="list every file as it is handled")
     p.add_argument("-q", "--quiet", action="store_true",
                    help="print nothing except errors")
+    p.add_argument("--log-file", type=Path,
+                   help="path to a file where deletions are logged (appends)")
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return p
+
 
 
 def _confirm(count: int, total: int, directory: Path) -> bool:
@@ -63,6 +66,8 @@ def main(argv: list[str] | None = None) -> int:
         format="%(levelname)s: %(message)s",
         force=True,
     )
+    for h in logging.getLogger().handlers:
+        h.setLevel(log_level)
 
     if args.days < 0:
         print("error: --days must be >= 0", file=sys.stderr)
@@ -75,6 +80,29 @@ def main(argv: list[str] | None = None) -> int:
         print("error: refusing to purge a filesystem root", file=sys.stderr)
         return 2
 
+    file_handler: logging.FileHandler | None = None
+    pkg_logger = logging.getLogger("log_purge")
+    if args.log_file:
+        try:
+            file_handler = logging.FileHandler(args.log_file, mode="a", encoding="utf-8")
+        except OSError as exc:
+            print(f"error: cannot open log file: {exc.strerror or exc}", file=sys.stderr)
+            return 2
+        file_formatter = logging.Formatter(
+            fmt="%(asctime)s %(message)s",
+            datefmt="%Y-%m-%dT%H:%M:%SZ",
+        )
+        file_formatter.converter = time.gmtime
+        file_handler.setFormatter(file_formatter)
+        file_handler.setLevel(logging.INFO)
+        file_handler.addFilter(
+            lambda record: record.getMessage().startswith(
+                ("DELETED ", "FAILED ", "WOULD_DELETE ", "SUMMARY ")
+            )
+        )
+        pkg_logger.addHandler(file_handler)
+        pkg_logger.setLevel(logging.INFO)
+
     try:
         now = time.time()
         candidates = find_old_files(
@@ -84,6 +112,7 @@ def main(argv: list[str] | None = None) -> int:
         if not candidates:
             if not args.quiet:
                 print(f"Nothing to delete: no files older than {args.days:g} day(s).")
+            pkg_logger.info("SUMMARY Nothing to delete: no files older than %g day(s).", args.days)
             return 0
 
         total = sum(c.size for c in candidates)
@@ -93,9 +122,12 @@ def main(argv: list[str] | None = None) -> int:
                       f"{age_in_days(c.mtime, now):.0f} days old)")
 
         if args.dry_run:
+            delete_files(candidates, dry_run=True)
             if not args.quiet:
                 print(f"[dry-run] Would delete {len(candidates)} file(s), "
                       f"freeing {format_size(total)}.")
+            pkg_logger.info("SUMMARY [dry-run] Would delete %d file(s), freeing %s.",
+                            len(candidates), format_size(total))
             return 0
 
         if not args.yes:
@@ -106,21 +138,33 @@ def main(argv: list[str] | None = None) -> int:
             if not _confirm(len(candidates), total, directory):
                 if not args.quiet:
                     print("Aborted. Nothing was deleted.")
+                pkg_logger.info("SUMMARY Aborted. Nothing was deleted.")
                 return 0
 
         result: PurgeResult = delete_files(candidates)
+
+        if not args.quiet:
+            print(f"Deleted {result.deleted} file(s), freed {format_size(result.freed_bytes)}.")
+        if result.failures:
+            print(f"{len(result.failures)} file(s) could not be deleted:", file=sys.stderr)
+            for path, exc in result.failures:
+                print(f"  {path}: {exc.strerror}", file=sys.stderr)
+            pkg_logger.info(
+                "SUMMARY Deleted %d file(s), freed %s (%d file(s) failed).",
+                result.deleted, format_size(result.freed_bytes), len(result.failures),
+            )
+            return 1
+        pkg_logger.info("SUMMARY Deleted %d file(s), freed %s.",
+                        result.deleted, format_size(result.freed_bytes))
+        return 0
     except KeyboardInterrupt:
         print("\nInterrupted.", file=sys.stderr)
         return 130
+    finally:
+        if file_handler:
+            pkg_logger.removeHandler(file_handler)
+            file_handler.close()
 
-    if not args.quiet:
-        print(f"Deleted {result.deleted} file(s), freed {format_size(result.freed_bytes)}.")
-    if result.failures:
-        print(f"{len(result.failures)} file(s) could not be deleted:", file=sys.stderr)
-        for path, exc in result.failures:
-            print(f"  {path}: {exc.strerror}", file=sys.stderr)
-        return 1
-    return 0
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -84,17 +84,28 @@ def find_old_files(
     return candidates
 
 
-def delete_files(candidates: list[Candidate]) -> PurgeResult:
-    """Delete each candidate. A failure on one file never stops the run."""
+def delete_files(candidates: list[Candidate], dry_run: bool = False) -> PurgeResult:
+    """Delete each candidate. A failure on one file never stops the run.
+
+    If *dry_run* is True, no files are unlinked; WOULD_DELETE records are
+    logged instead.
+    """
     result = PurgeResult()
     for c in candidates:
+        if dry_run:
+            result.deleted += 1
+            result.freed_bytes += c.size
+            log.info("WOULD_DELETE %s %d bytes", c.path, c.size)
+            continue
         try:
             c.path.unlink()
         except OSError as exc:
-            log.error("Failed to delete %s: %s", c.path, exc.strerror)
+            reason = exc.strerror or str(exc)
+            log.error("FAILED %s %s", c.path, reason)
             result.failures.append((c.path, exc))
         else:
             result.deleted += 1
             result.freed_bytes += c.size
-            log.debug("Deleted %s", c.path)
+            log.info("DELETED %s %d bytes", c.path, c.size)
     return result
+
