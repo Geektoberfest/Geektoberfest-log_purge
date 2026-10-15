@@ -30,6 +30,8 @@ def build_parser() -> argparse.ArgumentParser:
                    help="delete files older than this many days")
     p.add_argument("-p", "--pattern", default="*",
                    help="glob matched against file names (default: *)")
+    p.add_argument("-e", "--exclude", action="append", default=[], metavar="GLOB",
+                   help="exclude files whose name matches GLOB (may be repeated)")
     p.add_argument("--no-recursive", action="store_true",
                    help="only look at the top-level directory")
     p.add_argument("-n", "--dry-run", action="store_true",
@@ -80,6 +82,7 @@ def main(argv: list[str] | None = None) -> int:
         candidates = find_old_files(
             directory, args.days, args.pattern,
             recursive=not args.no_recursive, now=now,
+            exclude=args.exclude or None,
         )
         if not candidates:
             if not args.quiet:

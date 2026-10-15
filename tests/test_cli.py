@@ -107,3 +107,47 @@ def test_quiet_mode_deletion_failures_printed_to_stderr(tmp_path, capsys, monkey
     assert "could not be deleted" in captured.err
 
 
+def test_exclude_protects_files(tmp_path):
+    keep = make_old(tmp_path / "important.keep")
+    old = make_old(tmp_path / "old.log")
+    assert cli.main([
+        str(tmp_path), "-d", "30", "--yes", "--exclude", "*.keep"
+    ]) == 0
+    assert keep.exists()
+    assert not old.exists()
+
+
+def test_exclude_short_flag(tmp_path):
+    keep = make_old(tmp_path / "important.keep")
+    old = make_old(tmp_path / "old.log")
+    assert cli.main([str(tmp_path), "-d", "30", "--yes", "-e", "*.keep"]) == 0
+    assert keep.exists()
+    assert not old.exists()
+
+
+def test_exclude_multiple_patterns(tmp_path):
+    keep1 = make_old(tmp_path / "a.keep")
+    keep2 = make_old(tmp_path / "b.bak")
+    old = make_old(tmp_path / "c.log")
+    assert cli.main([
+        str(tmp_path), "-d", "30", "--yes",
+        "--exclude", "*.keep", "--exclude", "*.bak",
+    ]) == 0
+    assert keep1.exists()
+    assert keep2.exists()
+    assert not old.exists()
+
+
+def test_exclude_dry_run_preserves_files(tmp_path, capsys):
+    keep = make_old(tmp_path / "important.keep")
+    old = make_old(tmp_path / "old.log")
+    assert cli.main([
+        str(tmp_path), "-d", "30", "--dry-run", "--exclude", "*.keep"
+    ]) == 0
+    out = capsys.readouterr().out
+    assert "Would delete 1" in out
+    assert keep.exists()
+    assert old.exists()
+
+
+

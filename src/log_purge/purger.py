@@ -42,12 +42,15 @@ def find_old_files(
     pattern: str = "*",
     recursive: bool = True,
     now: float | None = None,
+    exclude: list[str] | None = None,
 ) -> list[Candidate]:
     """Return files under *root* whose mtime is older than *days* days.
 
     - Only regular files are returned; directories are never candidates.
     - Symlinks are skipped, so nothing outside *root* can be touched.
     - *pattern* is an fnmatch glob applied to the file name (e.g. ``*.log``).
+    - *exclude* is a list of fnmatch globs; files whose name matches any
+      pattern in *exclude* are protected from deletion.
     """
     if days < 0:
         raise ValueError("days must be >= 0")
@@ -58,6 +61,7 @@ def find_old_files(
 
     now = time.time() if now is None else now
     cutoff = now - days * SECONDS_PER_DAY
+    exclude = exclude or []
     candidates: list[Candidate] = []
 
     def _onerror(exc: OSError) -> None:
@@ -66,6 +70,9 @@ def find_old_files(
     for dirpath, _dirnames, filenames in os.walk(root, onerror=_onerror):
         for name in filenames:
             if not fnmatch.fnmatch(name, pattern):
+                continue
+            if any(fnmatch.fnmatch(name, ex) for ex in exclude):
+                log.debug("Excluded %s (matched exclusion pattern)", name)
                 continue
             path = Path(dirpath) / name
             try:

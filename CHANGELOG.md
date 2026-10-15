@@ -7,7 +7,9 @@ All notable changes are documented here. Format based on
 ## [Unreleased]
 
 ### Added
+- `--exclude` (`-e`) option to protect files matching a glob pattern from deletion; may be repeated for multiple patterns (#4).
 - `--quiet` (`-q`) flag to suppress all output except errors for cron and automated scripts (#5).
+
 
 ## [0.1.0] - 2026-10-04
 

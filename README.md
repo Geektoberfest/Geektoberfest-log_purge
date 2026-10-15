@@ -31,12 +31,19 @@ log-purge /logs --days 30 --yes
 
 # Only *.log files, top-level directory only
 log-purge /logs -d 14 -p "*.log" --no-recursive --yes
+
+# Protect specific files from deletion
+log-purge /logs -d 30 --yes --exclude "*.keep"
+
+# Multiple exclusion patterns
+log-purge /logs -d 30 --yes --exclude "*.keep" --exclude "*.bak"
 ```
 
 | Option | Meaning |
 |---|---|
 | `-d, --days N` | Delete files older than N days (required) |
 | `-p, --pattern GLOB` | Match file names, default `*` |
+| `-e, --exclude GLOB` | Protect files whose name matches GLOB (may be repeated) |
 | `--no-recursive` | Don't descend into subdirectories |
 | `-n, --dry-run` | List what would be deleted, delete nothing |
 | `-y, --yes` | Skip the confirmation prompt |
@@ -48,6 +55,7 @@ Cron example (daily at 02:00):
 ```
 0 2 * * * log-purge /logs --days 30 --pattern "*.log" --yes
 ```
+
 
 ## Safety
 
